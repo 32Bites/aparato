@@ -21,6 +21,9 @@
 //!
 //! If you're unsure what PCI device you want to query, you can let [`Fetch`] do that for you.
 //! It can return a list of PCI devices with all their information.
+//!
+#[macro_use]
+extern crate num_derive;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {

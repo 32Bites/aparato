@@ -5,12 +5,10 @@ use crate::extra::*;
 use crate::private::Properties;
 use crate::Device;
 use crate::Fetch;
+use pci_ids::FromId;
 use std::path::PathBuf;
-
 /// This is where PCI devices are located.
 const PATH_TO_PCI_DEVICES: &str = "/sys/bus/pci/devices/";
-/// This is where the pci.ids file is located.
-const PATH_TO_PCI_IDS: &str = "/usr/share/hwdata/pci.ids";
 
 #[derive(Debug)]
 pub struct LinuxPCIDevice {
@@ -250,30 +248,8 @@ impl Properties for LinuxPCIDevice {
             return;
         }
 
-        // Associate class_id with class_name
-        self.class_name = match &self.class_id[0] {
-            1 => DeviceClass::MassStorageController.to_string(),
-            2 => DeviceClass::NetworkController.to_string(),
-            3 => DeviceClass::DisplayController.to_string(),
-            4 => DeviceClass::MultimediaController.to_string(),
-            5 => DeviceClass::MemoryController.to_string(),
-            6 => DeviceClass::Bridge.to_string(),
-            7 => DeviceClass::CommunicationController.to_string(),
-            8 => DeviceClass::GenericSystemPeripheral.to_string(),
-            9 => DeviceClass::InputDeviceController.to_string(),
-            10 => DeviceClass::DockingStation.to_string(),
-            11 => DeviceClass::Processor.to_string(),
-            12 => DeviceClass::SerialBusController.to_string(),
-            13 => DeviceClass::WirelessController.to_string(),
-            14 => DeviceClass::IntelligentController.to_string(),
-            15 => DeviceClass::SatelliteCommunicationsController.to_string(),
-            16 => DeviceClass::EncryptionController.to_string(),
-            17 => DeviceClass::SignalProcessingController.to_string(),
-            18 => DeviceClass::ProcessingAccelerator.to_string(),
-            19 => DeviceClass::NonEssentialInstrumentation.to_string(),
-            46 => DeviceClass::Coprocessor.to_string(),
-            255 => DeviceClass::Unassigned.to_string(),
-            _ => DeviceClass::Unclassified.to_string(),
+        if let Some(class) = pci_ids::Class::from_id(self.class_id[0]) {
+            self.class_name = class.name().to_owned()
         }
     }
 
@@ -282,26 +258,12 @@ impl Properties for LinuxPCIDevice {
             return;
         }
 
-        if let Ok(lines) = read_lines(PATH_TO_PCI_IDS) {
-            let class: [u8; 1] = [self.class_id[0]];
-            let encoded_class = hex::encode(&class);
-            let subclass: [u8; 1] = [self.class_id[1]];
-            let encoded_subclass = hex::encode(&subclass);
-            let mut found_my_class = false;
-
-            for line in lines {
-                if let Ok(l) = &line {
-                    if l.is_empty() || l.starts_with("#") {
-                        continue;
-                    } else if l.starts_with("C") && l.contains(&encoded_class) {
-                        found_my_class = true;
-                    } else if l.starts_with("\t") && l.contains(&encoded_subclass) && found_my_class
-                    {
-                        self.subclass_name = l.replace(&encoded_subclass, "").trim().to_owned();
-                        return;
-                    }
+        if let Some(class) = pci_ids::Class::from_id(self.class_id[0]) {
+            class.subclasses().for_each(|subclass| {
+                if subclass.id() == self.class_id[1] {
+                    self.subclass_name = subclass.name().to_owned()
                 }
-            }
+            });
         }
     }
 
@@ -310,19 +272,9 @@ impl Properties for LinuxPCIDevice {
             return;
         }
 
-        if let Ok(lines) = read_lines(PATH_TO_PCI_IDS) {
-            let ven = hex::encode(self.vendor_id.to_owned());
-
-            for line in lines {
-                if let Ok(l) = &line {
-                    if l.len() == 0 || l.starts_with("#") || l.starts_with("C") {
-                        continue;
-                    } else if !l.starts_with("\t") && l.contains(&ven) {
-                        self.vendor_name = l.replace(&ven, "").trim().to_owned();
-                        return;
-                    }
-                }
-            }
+        let converted_vendor_id = bytes_to_u16(&self.vendor_id);
+        if let Some(vendor) = pci_ids::Vendor::from_id(converted_vendor_id) {
+            self.vendor_name = vendor.name().to_owned()
         }
     }
 
@@ -330,19 +282,13 @@ impl Properties for LinuxPCIDevice {
         if self.device_id.is_empty() {
             return;
         }
+        let converted_vendor_id = bytes_to_u16(&self.vendor_id);
+        let converted_device_id = bytes_to_u16(&self.device_id);
 
-        if let Ok(lines) = read_lines(PATH_TO_PCI_IDS) {
-            let dev = hex::encode(self.device_id.to_owned());
-            for line in lines {
-                if let Ok(l) = &line {
-                    if l.len() == 0 || l.starts_with("#") || l.starts_with("C") {
-                        continue;
-                    } else if l.starts_with("\t") && l.contains(&dev) {
-                        self.device_name = l.replace(&dev, "").trim().to_owned();
-                        return;
-                    }
-                }
-            }
+        if let Some(device) =
+            pci_ids::Device::from_vid_pid(converted_vendor_id, converted_device_id)
+        {
+            self.device_name = device.name().to_owned()
         }
     }
 
@@ -351,23 +297,19 @@ impl Properties for LinuxPCIDevice {
             return;
         }
 
-        if let Ok(lines) = read_lines(PATH_TO_PCI_IDS) {
-            let sub_dev = hex::encode(self.subsystem_device_id.to_owned());
-            let sub_ven = hex::encode(self.subsystem_vendor_id.to_owned());
-
-            for line in lines {
-                if let Ok(l) = &line {
-                    if l.len() == 0 && l.starts_with("#") && l.starts_with("C") {
-                        continue;
-                    } else if l.starts_with("\t\t") && l.contains(&sub_dev) && l.contains(&sub_ven)
-                    {
-                        self.subsystem_name = l
-                            .replace(&sub_dev, "")
-                            .replace(&sub_ven, "")
-                            .trim()
-                            .to_owned();
-                        return;
-                    }
+        let converted_vendor_id = bytes_to_u16(&self.vendor_id);
+        let converted_device_id = bytes_to_u16(&self.device_id);
+        if let Some(device) =
+            pci_ids::Device::from_vid_pid(converted_vendor_id, converted_device_id)
+        {
+            while let Some(subsystem) = device.subsystems().next() {
+                let converted_subsystem_vendor_id = bytes_to_u16(&self.subsystem_vendor_id);
+                let converted_subsystem_device_id = bytes_to_u16(&self.subsystem_device_id);
+                if subsystem.subvendor() == converted_subsystem_vendor_id
+                    && subsystem.subdevice() == converted_subsystem_device_id
+                {
+                    self.subsystem_name = subsystem.name().to_owned();
+                    break;
                 }
             }
         }

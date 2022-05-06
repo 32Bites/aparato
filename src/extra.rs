@@ -17,6 +17,16 @@ pub fn list_dir_entries(path: &str) -> Vec<PathBuf> {
     directory_entries
 }
 
+// Do some bitwise conversion
+#[doc(hidden)]
+pub fn bytes_to_u16(bytes: &[u8]) -> u16 {
+    if bytes.len() < 2 {
+        return 0;
+    }
+
+    return ((bytes[0] as u16) << 8) | bytes[1] as u16;
+}
+
 /// This function returns the basename of a given path.
 #[doc(hidden)]
 pub fn basename<'a>(path: String) -> String {

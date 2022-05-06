@@ -1,8 +1,11 @@
 //! This module contains a crucial enum, [DeviceClass], that you can use when working with [Fetch](crate::Fetch).
 
+use num_traits::ToPrimitive;
+use pci_ids::FromId;
 use std::fmt;
-
 /// This enum holds variants that are defined as classes in <https://pci-ids.ucw.cz/read/PD/>.
+
+#[derive(Debug, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum DeviceClass {
     Unclassified,                      // ID: 00
     MassStorageController,             // ID: 01
@@ -30,31 +33,12 @@ pub enum DeviceClass {
 
 impl fmt::Display for DeviceClass {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            DeviceClass::Unassigned => write!(f, "Unassigned"),
-            DeviceClass::Unclassified => write!(f, "Unclassified"),
-            DeviceClass::MassStorageController => write!(f, "Mass Storage Controller"),
-            DeviceClass::NetworkController => write!(f, "Network Controller"),
-            DeviceClass::DisplayController => write!(f, "Display Controller"),
-            DeviceClass::MultimediaController => write!(f, "Multimedia Controller"),
-            DeviceClass::MemoryController => write!(f, "Memory Controller"),
-            DeviceClass::Bridge => write!(f, "Bridge"),
-            DeviceClass::CommunicationController => write!(f, "Communication Controller"),
-            DeviceClass::GenericSystemPeripheral => write!(f, "Generic System Peripheral"),
-            DeviceClass::InputDeviceController => write!(f, "Input Device Controller"),
-            DeviceClass::DockingStation => write!(f, "Docking Station"),
-            DeviceClass::Processor => write!(f, "Processor"),
-            DeviceClass::Coprocessor => write!(f, "Coprocessor"),
-            DeviceClass::SerialBusController => write!(f, "Serial Bus Controller"),
-            DeviceClass::WirelessController => write!(f, "Wireless Controller"),
-            DeviceClass::IntelligentController => write!(f, "Intelligent Controller"),
-            DeviceClass::SatelliteCommunicationsController => {
-                write!(f, "Satellite Communications Controller")
-            }
-            DeviceClass::EncryptionController => write!(f, "Encryption Controller"),
-            DeviceClass::SignalProcessingController => write!(f, "Signal Processing Controller"),
-            DeviceClass::ProcessingAccelerator => write!(f, "Processing Accelerators"),
-            DeviceClass::NonEssentialInstrumentation => write!(f, "Non Essential Instrumentation"),
-        }
+        write!(
+            f,
+            "{}",
+            pci_ids::Class::from_id(ToPrimitive::to_u8(self).unwrap_or(0))
+                .ok_or(fmt::Error)?
+                .name()
+        )
     }
 }
