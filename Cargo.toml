@@ -14,6 +14,5 @@ authors = ["grtcdr <grtcdr@pm.me>"]
 cfg-if = "1.0.0"
 hex = "0.4.3"
 pci-ids = "0.2.4"
-"derive" = "1.0.0"
 num-traits = "0.2"
 num-derive = "0.3"
